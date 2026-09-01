@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GEO CODES — Learn Geography Through Telephone Area Codes</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    :root {
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #16a34a;
+      --error: #dc2626;
+      --border: #e2e8f0;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg-color); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Layout */
+    #app-container { display: flex; flex: 1; height: 100vh; width: 100vw; overflow: hidden; }
+    #quiz-panel { width: 40%; max-width: 500px; min-width: 340px; background: var(--card-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; z-index: 10; overflow-y: auto; }
+    #map-panel { flex: 1; position: relative; height: 100%; }
+    #map { width: 100%; height: 100%; background: #e5e3df; }
+
+    /* Map Controls Overlay */
+    .map-controls { position: absolute; top: 12px; right: 12px; z-index: 1000; display: flex; gap: 8px; background: rgba(255,255,255,0.9); padding: 6px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+    .map-btn { border: none; background: white; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; border: 1px solid var(--border); }
+    .map-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+    /* UI Components */
+    h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+    .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+    
+    .btn { background: var(--primary); color: white; border: none; padding: 12px 16px; border-radius: var(--radius); font-weight: 600; cursor: pointer; transition: background 0.2s; width: 100%; text-align: center; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #f1f5f9; color: var(--text-main); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: #e2e8f0; }
+
+    /* Screens */
+    .screen { display: none; flex-direction: column; height: 100%; }
+    .screen.active { display: flex; }
+
+    /* Start Screen */
+    .country-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; margin-bottom: 24px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); padding: 16px; border-radius: var(--radius); cursor: pointer; transition: border-color 0.2s, transform 0.1s; }
+    .card:hover { border-color: var(--primary); transform: translateY(-2px); }
+    .card h3 { font-size: 16px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+    .card p { font-size: 12px; color: var(--text-muted); }
+    .progress-bar { height: 4px; background: #e2e8f0; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s; }
+
+    /* Quiz Panel Content */
+    .quiz-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .tag { background: #eff6ff; color: var(--primary); padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    
+    .question-box { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; margin-bottom: 20px; }
+    .area-code-display { font-size: 42px; font-weight: 900; color: var(--primary); letter-spacing: -1px; margin: 8px 0; }
+    
+    .options-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .option-btn { background: white; border: 1px solid var(--border); padding: 14px; border-radius: var(--radius); text-align: left; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .option-btn:hover { border-color: var(--primary); background: #f8fafc; }
+
+    .input-field { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 16px; margin-bottom: 12px; }
+
+    /* Feedback Box */
+    .feedback { padding: 16px; border-radius: var(--radius); margin-bottom: 16px; display: none; }
+    .feedback.correct { background: #dcfce7; color: #14532d; border: 1px solid #86efac; }
+    .feedback.incorrect { background: #fee2e2; color: #7f1d1d; border: 1px solid #fca5a5; }
+
+    /* Multi-select World Mode */
+    .checkbox-group { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+    .checkbox-label { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; cursor: pointer; }
+    .checkbox-label input { width: 18px; height: 18px; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      #app-container { flex-direction: column; }
+      #quiz-panel { width: 100%; max-width: none; height: 50%; border-right: none; border-bottom: 1px solid var(--border); }
+      #map-panel { height: 50%; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app-container">
+  
+  <!-- LEFT/TOP: Quiz Panel -->
+  <div id="quiz-panel">
+    
+    <!-- SCREEN 1: Home Screen -->
+    <div id="screen-home" class="screen active">
+      <h1>GEO CODES</h1>
+      <p class="subtitle">Learn geography through telephone area codes</p>
+      
+      <div class="card" id="btn-world-mode">
+        <h3>🌍 WORLD MODE</h3>
+        <p>Mixed practice across selected countries</p>
+      </div>
+
+      <div style="margin-top: 24px;">
+        <p style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Individual Countries</p>
+        <div class="country-grid" id="country-list"></div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: World Mode Selection -->
+    <div id="screen-world-select" class="screen">
+      <h1>World Quiz</h1>
+      <p class="subtitle">Select countries to combine in this session</p>
+      
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <button class="map-btn" id="btn-select-all">Select All</button>
+        <button class="map-btn" id="btn-clear-all">Clear All</button>
+      </div>
+
+      <div class="checkbox-group" id="world-country-checkboxes"></div>
+
+      <div style="margin-top: auto;">
+        <button class="btn" id="btn-start-world">Start World Quiz</button>
+        <button class="btn btn-secondary" style="margin-top: 8px;" onclick="UI.showScreen('screen-home')">Back</button>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Quiz Screen -->
+    <div id="screen-quiz" class="screen">
+      <div class="quiz-header">
+        <span class="tag" id="country-tag">Germany</span>
+        <span style="font-size: 12px; color: var(--text-muted);" id="session-progress">1 / 10</span>
+      </div>
+
+      <div class="question-box">
+        <div style="font-size: 12px; color: var(--text-muted); font-weight: 600;">AREA CODE</div>
+        <div class="area-code-display" id="display-area-code">06221</div>
+        <div style="font-size: 13px; color: var(--text-muted);" id="question-prompt">Where is this area code?</div>
+      </div>
+
+      <!-- Option Containers per Quiz Type -->
+      <div id="container-mc" class="options-grid"></div>
+      
+      <div id="container-recall" style="display: none;">
+        <input type="text" id="recall-input" class="input-field" placeholder="Enter city name..." autocomplete="off">
+        <button class="btn" id="btn-submit-recall">Submit Answer</button>
+      </div>
+
+      <div id="container-map" style="display: none;">
+        <p style="font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 12px;">
+          📍 Click on the map location where you think this area code is located.
+        </p>
+      </div>
+
+      <!-- Feedback Area -->
+      <div id="feedback-box" class="feedback">
+        <div id="feedback-title" style="font-weight: 700; margin-bottom: 4px;"></div>
+        <div id="feedback-details" style="font-size: 13px;"></div>
+      </div>
+
+      <button class="btn" id="btn-next" style="display: none; margin-top: auto;">Next Question →</button>
+    </div>
+
+    <!-- SCREEN 4: Summary -->
+    <div id="screen-summary" class="screen">
+      <h1>Session Complete</h1>
+      <p class="subtitle">Great job practicing active retrieval!</p>
+
+      <div class="question-box" style="margin-top: 20px;">
+        <div style="font-size: 36px; font-weight: 800; color: var(--primary);" id="summary-score">8/10</div>
+        <div style="font-size: 14px; color: var(--text-muted);" id="summary-accuracy">80% Accuracy</div>
+      </div>
+
+      <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn" id="btn-restart">Play Again</button>
+        <button class="btn btn-secondary" onclick="UI.showScreen('screen-home')">Home</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT/BOTTOM: Interactive Map -->
+  <div id="map-panel">
+    <div class="map-controls">
+      <button class="map-btn" id="btn-toggle-labels">City Labels: OFF</button>
+      <button class="map-btn" id="btn-toggle-tiles">Style: Voyager</button>
+    </div>
+    <div id="map"></div>
+  </div>
+
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+/**
+ * 1. DATA MANAGER
+ */
+const GeoData = {
+  countries: {
+    germany: { name: "Germany", code: "+49", flag: "🇩🇪", defaultBounds: [[47.2, 5.8], [55.0, 15.0]] },
+    france: { name: "France", code: "+33", flag: "🇫🇷", defaultBounds: [[41.3, -5.1], [51.0, 9.5]] },
+    india: { name: "India", code: "+91", flag: "🇮🇳", defaultBounds: [[8.0, 68.0], [35.5, 97.0]] },
+    brazil: { name: "Brazil", code: "+55", flag: "🇧🇷", defaultBounds: [[-33.7, -73.9], [5.2, -34.7]] },
+    usa: { name: "United States", code: "+1", flag: "🇺🇸", defaultBounds: [[24.3, -125.0], [49.3, -66.9]] }
+  },
+
+  items: [
+    // Germany
+    { id: "de-06221", country: "germany", areaCode: "06221", region: "Baden-Württemberg", primaryCity: "Heidelberg", aliases: ["Heidelberg"], coordinates: { lat: 49.3988, lon: 8.6724 }, nearbyCities: ["Mannheim", "Karlsruhe", "Heilbronn", "Frankfurt", "Stuttgart"] },
+    { id: "de-089", country: "germany", areaCode: "089", region: "Bavaria", primaryCity: "Munich", aliases: ["Munich", "München"], coordinates: { lat: 48.1351, lon: 11.5820 }, nearbyCities: ["Augsburg", "Ingolstadt", "Rosenheim", "Landshut"] },
+    { id: "de-040", country: "germany", areaCode: "040", region: "Hamburg", primaryCity: "Hamburg", aliases: ["Hamburg"], coordinates: { lat: 53.5511, lon: 9.9937 }, nearbyCities: ["Lübeck", "Bremen", "Kiel", "Lüneburg"] },
+    { id: "de-030", country: "germany", areaCode: "030", region: "Berlin", primaryCity: "Berlin", aliases: ["Berlin"], coordinates: { lat: 52.5200, lon: 13.4050 }, nearbyCities: ["Potsdam", "Cottbus", "Frankfurt (Oder)"] },
+    { id: "de-0221", country: "germany", areaCode: "0221", region: "North Rhine-Westphalia", primaryCity: "Cologne", aliases: ["Cologne", "Köln"], coordinates: { lat: 50.9375, lon: 6.9603 }, nearbyCities: ["Bonn", "Düsseldorf", "Aachen", "Leverkusen"] },
+
+    // France
+    { id: "fr-01", country: "france", areaCode: "01", region: "Île-de-France", primaryCity: "Paris Region", aliases: ["Paris"], coordinates: { lat: 48.8566, lon: 2.3522 }, nearbyCities: ["Versailles", "Boulogne-Billancourt", "Saint-Denis", "Orléans"] },
+    { id: "fr-0491", country: "france", areaCode: "0491", region: "Provence-Alpes-Côte d'Azur", primaryCity: "Marseille", aliases: ["Marseille", "Marseilles"], coordinates: { lat: 43.2965, lon: 5.3698 }, nearbyCities: ["Aix-en-Provence", "Toulon", "Nice", "Avignon"] },
+    { id: "fr-0478", country: "france", areaCode: "0478", region: "Auvergne-Rhône-Alpes", primaryCity: "Lyon", aliases: ["Lyon", "Lyons"], coordinates: { lat: 45.7640, lon: 4.8357 }, nearbyCities: ["Saint-Étienne", "Grenoble", "Geneva"] },
+
+    // India
+    { id: "in-022", country: "india", areaCode: "022", region: "Maharashtra", primaryCity: "Mumbai", aliases: ["Mumbai", "Bombay"], coordinates: { lat: 19.0760, lon: 72.8777 }, nearbyCities: ["Thane", "Navi Mumbai", "Pune", "Nashik", "Surat"] },
+    { id: "in-011", country: "india", areaCode: "011", region: "Delhi NCT", primaryCity: "Delhi", aliases: ["Delhi", "New Delhi"], coordinates: { lat: 28.6139, lon: 77.2090 }, nearbyCities: ["Gurugram", "Noida", "Faridabad", "Ghaziabad"] },
+    { id: "in-080", country: "india", areaCode: "080", region: "Karnataka", primaryCity: "Bengaluru", aliases: ["Bengaluru", "Bangalore"], coordinates: { lat: 12.9716, lon: 77.5946 }, nearbyCities: ["Mysuru", "Hosur", "Tumakuru"] },
+
+    // Brazil
+    { id: "br-11", country: "brazil", areaCode: "11", region: "São Paulo", primaryCity: "São Paulo Metropolitan Area", aliases: ["São Paulo", "Sao Paulo"], coordinates: { lat: -23.5505, lon: -46.6333 }, nearbyCities: ["Campinas", "Guarulhos", "Santos", "Sorocaba"] },
+    { id: "br-21", country: "brazil", areaCode: "21", region: "Rio de Janeiro", primaryCity: "Rio de Janeiro", aliases: ["Rio", "Rio de Janeiro"], coordinates: { lat: -22.9068, lon: -43.1729 }, nearbyCities: ["Niterói", "Nova Iguaçu", "Petrópolis"] },
+
+    // USA
+    { id: "us-415", country: "usa", areaCode: "415", region: "California", primaryCity: "San Francisco Bay Area", aliases: ["San Francisco", "SF"], coordinates: { lat: 37.7749, lon: -122.4194 }, nearbyCities: ["Oakland", "San Jose", "Berkeley", "Palo Alto"] },
+    { id: "us-212", country: "usa", areaCode: "212", region: "New York", primaryCity: "New York City (Manhattan)", aliases: ["New York", "NYC", "Manhattan"], coordinates: { lat: 40.7128, lon: -74.0060 }, nearbyCities: ["Jersey City", "Brooklyn", "Queens", "Newark"] },
+    { id: "us-312", country: "usa", areaCode: "312", region: "Illinois", primaryCity: "Chicago", aliases: ["Chicago"], coordinates: { lat: 41.8781, lon: -87.6298 }, nearbyCities: ["Evanston", "Naperville", "Aurora", "Gary"] }
+  ]
+};
+
+/**
+ * 2. LEARNING ENGINE
+ */
+const LearningEngine = {
+  getProgress() {
+    return JSON.parse(localStorage.getItem('geo_codes_progress') || '{}');
+  },
+
+  saveProgress(itemId, isCorrect) {
+    const progress = this.getProgress();
+    if (!progress[itemId]) {
+      progress[itemId] = { attempts: 0, correct: 0, streak: 0, lastTested: 0 };
+    }
+    progress[itemId].attempts++;
+    progress[itemId].lastTested = Date.now();
+    
+    if (isCorrect) {
+      progress[itemId].correct++;
+      progress[itemId].streak++;
+    } else {
+      progress[itemId].streak = 0;
+    }
+    
+    localStorage.setItem('geo_codes_progress', JSON.stringify(progress));
+  },
+
+  getItemProgress(itemId) {
+    return this.getProgress()[itemId] || { attempts: 0, correct: 0, streak: 0 };
+  },
+
+  getRecommendedMode(itemId) {
+    const p = this.getItemProgress(itemId);
+    if (p.streak === 0) return 'mc';
+    if (p.streak === 1) return 'recall';
+    return 'map';
+  },
+
+  generateSession(countries, length = 10) {
+    let pool = GeoData.items.filter(item => countries.includes(item.country));
+    if (pool.length === 0) pool = GeoData.items;
+
+    pool = [...pool].sort(() => Math.random() - 0.5);
+
+    const sessionItems = [];
+    let lastCountry = null;
+
+    for (let i = 0; i < length; i++) {
+      let candidateIdx = pool.findIndex(item => item.country !== lastCountry);
+      if (candidateIdx === -1) candidateIdx = 0;
+
+      const item = pool.splice(candidateIdx, 1)[0];
+      if (!item) break;
+      
+      sessionItems.push(item);
+      lastCountry = item.country;
+
+      if (pool.length === 0) {
+        pool = GeoData.items.filter(item => countries.includes(item.country)).sort(() => Math.random() - 0.5);
+      }
+    }
+
+    return sessionItems;
+  }
+};
+
+/**
+ * 3. MAP MANAGER (Fixed Server Endpoints)
+ */
+const MapManager = {
+  map: null,
+  markers: [],
+  showLabels: false,
+  currentTileStyle: 'standard',
+  tiles: {
+    standard: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    topo: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'
+  },
+  tileLayer: null,
+  mapClickCallback: null,
+
+  init() {
+    this.map = L.map('map', { zoomControl: false }).setView([20, 0], 2);
+    
+    this.tileLayer = L.tileLayer(this.tiles.standard, { 
+      maxZoom: 19,
+      subdomains: 'abcd',
+      attribution: '© OpenStreetMap © CARTO' 
+    }).addTo(this.map);
+
+    this.map.on('click', (e) => {
+      if (this.mapClickCallback) {
+        this.mapClickCallback(e.latlng);
+      }
+    });
+  },
+
+  setTileStyle(style) {
+    this.currentTileStyle = style;
+    this.tileLayer.setUrl(this.tiles[style]);
+  },
+
+  clear() {
+    this.markers.forEach(m => this.map.removeLayer(m));
+    this.markers = [];
+    this.mapClickCallback = null;
+  },
+
+  resetToCountry(countryKey) {
+    this.clear();
+    const country = GeoData.countries[countryKey];
+    if (country && country.defaultBounds) {
+      this.map.fitBounds(country.defaultBounds);
+    } else {
+      this.map.setView([20, 0], 2);
+    }
+  },
+
+  revealAnswer(item) {
+    this.clear();
+    const latlng = [item.coordinates.lat, item.coordinates.lon];
+
+    const mainMarker = L.marker(latlng).addTo(this.map)
+      .bindPopup(`<b>${item.primaryCity}</b><br>Code: ${item.areaCode}`).openPopup();
+    this.markers.push(mainMarker);
+
+    this.map.flyTo(latlng, 9, { duration: 1.5 });
+  },
+
+  enableMapClick(callback) {
+    this.mapClickCallback = callback;
+  }
+};
+
+/**
+ * 4. UI & GAME CONTROLLER
+ */
+const UI = {
+  currentSession: [],
+  currentIndex: 0,
+  score: 0,
+  selectedCountriesWorld: ["germany", "france", "india", "brazil", "usa"],
+  activeMode: 'learn',
+
+  init() {
+    MapManager.init();
+    this.renderHomeScreen();
+    this.setupEventListeners();
+  },
+
+  showScreen(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(screenId).classList.add('active');
+  },
+
+  renderHomeScreen() {
+    const list = document.getElementById('country-list');
+    list.innerHTML = '';
+
+    Object.entries(GeoData.countries).forEach(([key, country]) => {
+      const items = GeoData.items.filter(i => i.country === key);
+      const progress = LearningEngine.getProgress();
+      const learned = items.filter(i => (progress[i.id]?.streak || 0) > 0).length;
+      const pct = items.length ? Math.round((learned / items.length) * 100) : 0;
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <h3><span>${country.flag}</span> ${country.name}</h3>
+        <p>${items.length} Area Codes</p>
+        <div class="progress-bar"><div class="progress-fill" style="width: ${pct}%"></div></div>
+      `;
+      card.onclick = () => this.startQuiz([key]);
+      list.appendChild(card);
+    });
+  },
+
+  renderWorldSelection() {
+    const container = document.getElementById('world-country-checkboxes');
+    container.innerHTML = '';
+
+    Object.entries(GeoData.countries).forEach(([key, country]) => {
+      const isChecked = this.selectedCountriesWorld.includes(key) ? 'checked' : '';
+      const label = document.createElement('label');
+      label.className = 'checkbox-label';
+      label.innerHTML = `
+        <input type="checkbox" value="${key}" ${isChecked}>
+        <span>${country.flag} ${country.name}</span>
+      `;
+      container.appendChild(label);
+    });
+  },
+
+  startQuiz(countries) {
+    this.currentSession = LearningEngine.generateSession(countries, 10);
+    this.currentIndex = 0;
+    this.score = 0;
+    this.showScreen('screen-quiz');
+    this.loadQuestion();
+  },
+
+  loadQuestion() {
+    const item = this.currentSession[this.currentIndex];
+    const country = GeoData.countries[item.country];
+
+    document.getElementById('feedback-box').style.display = 'none';
+    document.getElementById('btn-next').style.display = 'none';
+    document.getElementById('container-mc').style.display = 'none';
+    document.getElementById('container-recall').style.display = 'none';
+    document.getElementById('container-map').style.display = 'none';
+    
+    document.getElementById('country-tag').innerText = `${country.flag} ${country.name}`;
+    document.getElementById('session-progress').innerText = `${this.currentIndex + 1} / ${this.currentSession.length}`;
+    document.getElementById('display-area-code').innerText = item.areaCode;
+
+    MapManager.resetToCountry(item.country);
+
+    let mode = this.activeMode;
+    if (mode === 'learn') {
+      mode = LearningEngine.getRecommendedMode(item.id);
+    }
+
+    if (mode === 'mc') this.renderMultipleChoice(item);
+    else if (mode === 'recall') this.renderRecall(item);
+    else if (mode === 'map') this.renderMapQuestion(item);
+  },
+
+  renderMultipleChoice(item) {
+    const container = document.getElementById('container-mc');
+    container.style.display = 'flex';
+    container.innerHTML = '';
+
+    let distractors = GeoData.items
+      .filter(i => i.id !== item.id && i.country === item.country)
+      .map(i => i.primaryCity);
+
+    if (distractors.length < 3) {
+      const extra = GeoData.items.filter(i => i.id !== item.id).map(i => i.primaryCity);
+      distractors = [...new Set([...distractors, ...extra])];
+    }
+
+    distractors = distractors.sort(() => Math.random() - 0.5).slice(0, 3);
+    const options = [...distractors, item.primaryCity].sort(() => Math.random() - 0.5);
+
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'option-btn';
+      btn.innerText = opt;
+      btn.onclick = () => this.evaluateAnswer(opt === item.primaryCity, item);
+      container.appendChild(btn);
+    });
+  },
+
+  renderRecall(item) {
+    const container = document.getElementById('container-recall');
+    container.style.display = 'block';
+    const input = document.getElementById('recall-input');
+    input.value = '';
+    input.focus();
+
+    document.getElementById('btn-submit-recall').onclick = () => {
+      const val = input.value.trim().toLowerCase();
+      const isCorrect = item.aliases.some(alias => alias.toLowerCase() === val) || val === item.primaryCity.toLowerCase();
+      this.evaluateAnswer(isCorrect, item);
+    };
+  },
+
+  renderMapQuestion(item) {
+    const container = document.getElementById('container-map');
+    container.style.display = 'block';
+
+    MapManager.enableMapClick((clickedLatLng) => {
+      const dist = this.getHaversineDistance(
+        clickedLatLng.lat, clickedLatLng.lng,
+        item.coordinates.lat, item.coordinates.lon
+      );
+
+      const isCorrect = dist < 150;
+      this.evaluateAnswer(isCorrect, item, `${Math.round(dist)} km away`);
+    });
+  },
+
+  evaluateAnswer(isCorrect, item, extraInfo = '') {
+    LearningEngine.saveProgress(item.id, isCorrect);
+    if (isCorrect) this.score++;
+
+    document.getElementById('container-mc').style.display = 'none';
+    document.getElementById('container-recall').style.display = 'none';
+    document.getElementById('container-map').style.display = 'none';
+
+    const fb = document.getElementById('feedback-box');
+    const fbTitle = document.getElementById('feedback-title');
+    const fbDetails = document.getElementById('feedback-details');
+
+    fb.className = `feedback ${isCorrect ? 'correct' : 'incorrect'}`;
+    fbTitle.innerText = isCorrect ? '✓ Correct' : '✗ Incorrect';
+    fbDetails.innerHTML = `
+      <b>Target:</b> ${item.primaryCity} (${item.region})<br>
+      <b>Area Code:</b> ${item.areaCode} ${extraInfo ? `<br><i>${extraInfo}</i>` : ''}
+    `;
+    fb.style.display = 'block';
+
+    MapManager.revealAnswer(item);
+
+    const nextBtn = document.getElementById('btn-next');
+    nextBtn.style.display = 'block';
+    nextBtn.onclick = () => {
+      this.currentIndex++;
+      if (this.currentIndex < this.currentSession.length) {
+        this.loadQuestion();
+      } else {
+        this.showSummary();
+      }
+    };
+  },
+
+  showSummary() {
+    this.showScreen('screen-summary');
+    document.getElementById('summary-score').innerText = `${this.score} / ${this.currentSession.length}`;
+    const pct = Math.round((this.score / this.currentSession.length) * 100);
+    document.getElementById('summary-accuracy').innerText = `${pct}% Accuracy`;
+    this.renderHomeScreen();
+  },
+
+  getHaversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  },
+
+  setupEventListeners() {
+    document.getElementById('btn-world-mode').onclick = () => {
+      this.renderWorldSelection();
+      this.showScreen('screen-world-select');
+    };
+
+    document.getElementById('btn-start-world').onclick = () => {
+      const selected = Array.from(document.querySelectorAll('#world-country-checkboxes input:checked'))
+                            .map(cb => cb.value);
+      if (selected.length === 0) return alert('Select at least one country!');
+      this.selectedCountriesWorld = selected;
+      this.startQuiz(selected);
+    };
+
+    document.getElementById('btn-select-all').onclick = () => {
+      document.querySelectorAll('#world-country-checkboxes input').forEach(cb => cb.checked = true);
+    };
+
+    document.getElementById('btn-clear-all').onclick = () => {
+      document.querySelectorAll('#world-country-checkboxes input').forEach(cb => cb.checked = false);
+    };
+
+    document.getElementById('btn-restart').onclick = () => {
+      this.startQuiz(this.selectedCountriesWorld);
+    };
+
+    const labelBtn = document.getElementById('btn-toggle-labels');
+    labelBtn.onclick = () => {
+      MapManager.showLabels = !MapManager.showLabels;
+      labelBtn.innerText = `City Labels: ${MapManager.showLabels ? 'ON' : 'OFF'}`;
+      labelBtn.classList.toggle('active', MapManager.showLabels);
+    };
+
+    const tileBtn = document.getElementById('btn-toggle-tiles');
+    tileBtn.onclick = () => {
+      const nextStyle = MapManager.currentTileStyle === 'standard' ? 'topo' : 'standard';
+      MapManager.setTileStyle(nextStyle);
+      tileBtn.innerText = `Style: ${nextStyle === 'standard' ? 'Voyager' : 'Topo'}`;
+    };
+  }
+};
+
+window.onload = () => UI.init();
+</script>
+</body>
+</html>
